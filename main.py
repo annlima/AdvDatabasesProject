@@ -1,6 +1,5 @@
 import collections
 import requests
-import sklearn
 from bs4 import BeautifulSoup
 import spacy
 from sklearn.feature_extraction.text import TfidfVectorizer, CountVectorizer
@@ -124,7 +123,7 @@ def main_menu(db, matrix, vectorizer):
         print("3. Compare Document Similarity")
         print("4. Compare Document with All Documents (ALL METHODS)")
         print("5. Remove Documents from Database")
-        print("6. Show Term-Document Matrix") # corregir
+        print("6. Show Term-Document Matrix")
         print("7. Similarity Matrix")
         print("8. Query Document Relevance")
         print("9. Exit")
@@ -177,6 +176,7 @@ def add_document_by_text(cursor, text):
     else:
         print("Document already exists in the database.")
 
+
 def add_document_by_link(cursor, link):
     text = fetch_and_extract_text(link)
     if not document_exists(cursor, link):
@@ -201,10 +201,25 @@ def show_term_document_matrix(cursor):
         if doc_index is not None and term_index is not None:
             matrix[doc_index][term_index] = frequency
 
+    normalized_matrix = []
+    for row in matrix:
+        total_terms = sum(row)
+        if total_terms > 0:
+            normalized_row = [round((freq / total_terms), 2) for freq in row]  # Use percentage normalization
+        else:
+            normalized_row = [0] * len(row)  # Ensure all zeros if no terms
+        normalized_matrix.append(normalized_row)
+
+    # Display headers with term IDs
     print("Term-Document Matrix:")
-    print("\t" + "\t".join(term_text for _, term_text in terms))
-    for (doc_id, _, _), row in zip(documents, matrix):
-        print(f"Doc {doc_id}:\t" + "\t".join(str(freq) for freq in row))
+    headers = [f"T{term_id}" for term_id, _ in terms]
+    print("\t" + "\t".join(headers))
+    for (doc_id, _, _), row in zip(documents, normalized_matrix):
+        print(f"Doc {doc_id}:\t" + "\t".join(f"{freq}" if freq != 0 else "0" for freq in row))
+
+
+
+
 
 def compare_with_all_documents(db, matrix):
     cursor = db.cursor()
@@ -234,7 +249,7 @@ def compare_with_all_documents(db, matrix):
     for doc_id, title in documents:
         doc_index = id_to_index.get(doc_id)
         if doc_id == selected_id or doc_index is None or doc_index >= len(matrix):
-            continue  # Skip comparing the document with itself or if index out of range
+            continue
 
         compare_vector = matrix[doc_index]
         print(f"\nComparing Document {selected_id} with Document {doc_id} ({title}):")
@@ -281,11 +296,9 @@ def compare_documents(cursor, id1, id2, matrix):
         if choice == '9':
             break
 
-        # Fetch vectors for the selected documents
         vectorA = matrix[id1]
         vectorB = matrix[id2]
 
-        # Perform the selected comparison
         if choice == '1':
             print(f"Cosine Similarity: {cosine_similarity(vectorA, vectorB)}")
         elif choice == '2':
@@ -338,6 +351,7 @@ def main():
     finally:
         cursor.close()
         close_db(db)
+
 
 if __name__ == "__main__":
     main()
