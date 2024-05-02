@@ -1,36 +1,66 @@
-# Advanced Databases Project
+Here's a README that you could use for the GitHub repository containing the code for your document management system. This README outlines the purpose, setup, and usage of the system effectively for users and contributors.
 
-## Installation
+```markdown
+# Document Management System
 
-1. **Clone the repository:**
+This Document Management System (DMS) is designed to handle and analyze text documents within a MySQL database. It provides functionalities for adding, deleting, and listing documents, alongside advanced text processing and analysis capabilities. This system integrates document management with text similarity analysis using natural language processing and machine learning techniques.
+
+## Features
+
+- **Database Integration**: Connect to a MySQL database to manage document data.
+- **Document Handling**: Add, delete, and list documents using either textual input or URLs.
+- **Text Analysis**: Process text to extract meaningful data and calculate term frequencies.
+- **Similarity Measurement**: Compare documents using various metrics like cosine similarity, Jaccard index, and more.
+- **Interactive Web Interface**: Manage documents through a user-friendly interface powered by Streamlit.
+
+## Prerequisites
+
+Before you start, ensure you have the following installed:
+- Python 3.8 or higher
+- MySQL Server
+- Python libraries: `mysql-connector-python`, `pandas`, `numpy`, `scikit-learn`, `spacy`, `streamlit`, `beautifulsoup4`, `requests`
+- After install spacy you have to install: `python -m spacy download en_core_web_sm`
+
+## Setup
+
+1. **Clone the repository**:
    ```bash
-   git clone <(https://github.com/annlima/AdvDatabasesProject)>
+   git clone https://github.com/yourusername/document-management-system.git
+   cd document-management-system
    ```
 
-2. **Install required Python packages:**
+2. **Install dependencies**:
    ```bash
-   pip install numpy scipy mysql-connector-python requests bs4 scikit-learn spacy
-   python -m spacy download en_core_web_sm
+   pip install -r requirements.txt
    ```
 
-3. **Set up the MySQL database:**
-    - Execute the provided SQL script to create and configure the database.
+3. **Initialize the database**:
+   - Run the MySQL server and create a new database named `DocumentDatabase`.
+   - Execute the SQL script provided in `database_setup.sql` to create the necessary tables.
+
+4. **Configure your database connection**:
+   - Modify the `connect_db` function in the `database.py` file to match your database credentials.
+
+5. **Run the Streamlit application**:
+   ```bash
+   streamlit run app.py
+   ```
 
 ## Usage
 
-1. **Start the script:**
-   ```bash
-   python document_analysis_system.py
-   ```
+- **Adding Documents**: Add documents by inputting text directly or providing URLs for text extraction.
+- **Deleting Documents**: Documents can be deleted by ID or title.
+- **Viewing Documents**: List all documents along with their details stored in the database.
+- **Document Comparison**: Compare two documents based on different similarity metrics.
+- **Term Document Matrix and Similarity Matrix**: Visualize the relationship between different documents and terms.
 
-2. **Follow the on-screen menu to interact with the system:**
-    - Add documents by text or URL.
-    - Compare documents using various similarity metrics.
-    - View and manage the document list and term-document matrix.
+## Contributing
 
-## Configurations
+Contributions to improve the Document Management System are welcome. Before contributing, please ensure to follow the coding conventions and pull request process.
 
-- **Database Configuration**: Modify `connect_db()` in `db_config.py` to change database connection settings.
+## License
 
-- **Model Parameters**: Adjust parameters for vectorization and topic modeling within the script as needed.
+This project is licensed under the MIT License - see the [LICENSE.md](LICENSE.md) file for details.
+```
 
+This README file provides a good starting point for anyone looking to understand or contribute to the project. It details the system's capabilities, setup instructions, usage guidelines, and ways to contribute, making it comprehensive for diverse GitHub users.
