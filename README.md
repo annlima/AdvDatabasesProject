@@ -54,5 +54,3 @@ Before you start, ensure you have the following installed:
 ## Contributing
 
 Contributions to improve the Document Management System are welcome. Before contributing, please ensure to follow the coding conventions and pull request process.
-
-This README file provides a good starting point for anyone looking to understand or contribute to the project. It details the system's capabilities, setup instructions, usage guidelines, and ways to contribute, making it comprehensive for diverse GitHub users.
