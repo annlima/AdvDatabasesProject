@@ -13,7 +13,7 @@ from Queries import *
 
 # Load the English NLP model
 nlp = spacy.load("en_core_web_sm")
-vectorizer = TfidfVectorizer()
+main_vectorizer = TfidfVectorizer()
 
 
 def fetch_and_extract_text(url):
@@ -51,13 +51,13 @@ def create_lsi_model(texts, num_topics=10):
     terms = vectorizer.get_feature_names_out()
     for i, comp in enumerate(svd_model.components_):
         terms_comp = zip(terms, comp)
-        sorted_terms = sorted(terms_comp, key=lambda x: x[1], reverse=True)[:10]
+        sorted_terms = sorted(terms_comp, key=lambda term: term[1], reverse=True)[:10]
         print("Topic " + str(i) + ": ")
         print(sorted_terms)
 
 
 # URL of the web page you want to process
-urls = [
+document_urls = [
     "https://en.wikipedia.org/wiki/Public_health",
     "https://en.wikipedia.org/wiki/Environmental_health",
     "https://en.wikipedia.org/wiki/Air_pollution",
@@ -88,6 +88,8 @@ def plot_similarities(urls, similarities):
 def query_relevant_documents(query, texts, vectorizer, top_n=5):
     while True:
         print("\nSelect a method:")
+        print("For Cosine, Dice, and Jaccard, a value of 0 means no similarity, and 1 means a complete match.")
+        print("For Euclidean and Manhattan, the closer the value is to 0, the better the similarity.")
         print("1. Cosine Similarity")
         print("2. Dice Similarity")
         print("3. Jaccard Similarity")
@@ -101,16 +103,16 @@ def query_relevant_documents(query, texts, vectorizer, top_n=5):
 
         method = "cosine" if method_choice == "1" else \
             "dice" if method_choice == "2" else \
-                "jaccard" if method_choice == "3" else \
-                    "euclidean" if method_choice == "4" else \
-                        "manhattan"
+            "jaccard" if method_choice == "3" else \
+            "euclidean" if method_choice == "4" else \
+            "manhattan"
 
         # Preprocess and vectorize the query
         similarities = calculate_similarities(query, texts, vectorizer, method)
 
         # Get the top N indices of the most similar documents
         top_indices = np.argsort(similarities)[-top_n:]
-        results = [(urls[i], similarities[i]) for i in top_indices]
+        results = [(document_urls[i], similarities[i]) for i in top_indices]
         for url, similarity in results:
             print(f"URL: {url}, Similarity: {similarity}")
         # plot_similarities(urls, similarities)
@@ -125,6 +127,7 @@ def calculate_similarities(query, texts, vectorizer, method):
 
     similarities = []
     for text_vector in text_vectors:
+        similarity = float('nan')
         if method == "cosine":
             similarity = cosine_similarity(query_vector, text_vector.ravel())  # Flatten the vector
         elif method == "dice":
@@ -175,7 +178,7 @@ def handle_menu_choice(db, choice, matrix, vectorizer):
         elif choice == "3":
             id1 = int(input("Enter first document ID: "))
             id2 = int(input("Enter second document ID: "))
-            compare_documents(cursor, id1, id2, matrix)
+            compare_documents(id1, id2, matrix)
         elif choice == "4":
             compare_with_all_documents(db, matrix)
         elif choice == "5":
@@ -186,9 +189,7 @@ def handle_menu_choice(db, choice, matrix, vectorizer):
             show_similarity_matrix(cursor, vectorizer)
         elif choice == "8":
             query = input("Enter a query: ")
-            results = query_relevant_documents(query, build_corpus_from_db(cursor), vectorizer)
-            for url, similarity in results:
-                print(f"URL: {url}, Similarity: {similarity}")
+            query_relevant_documents(query, build_corpus_from_db(cursor), vectorizer)
         db.commit()
     except Exception as e:
         print("An error occurred:", e)
@@ -205,6 +206,8 @@ def show_similarity_matrix(cursor, vectorizer):
         return
 
     print("\nSelect a method for similarity measurement:")
+    print("For Cosine, Dice, and Jaccard, a value of 0 means no similarity, and 1 means a complete match.")
+    print("For Euclidean and Manhattan, the closer the value is to 0, the better the similarity.")
     print("1. Cosine Similarity")
     print("2. Dice Similarity")
     print("3. Jaccard Similarity")
@@ -213,9 +216,9 @@ def show_similarity_matrix(cursor, vectorizer):
     choice = input("Enter your choice: ")
     method = "cosine" if choice == "1" else \
         "dice" if choice == "2" else \
-            "jaccard" if choice == "3" else \
-                "euclidean" if choice == "4" else \
-                    "manhattan"
+        "jaccard" if choice == "3" else \
+        "euclidean" if choice == "4" else \
+        "manhattan"
 
     similarity_matrix = create_similarity_matrix(texts, vectorizer, method)
 
@@ -241,6 +244,7 @@ def create_similarity_matrix(texts, vectorizer, method):
     # Calculate similarity for each pair of documents
     for i in range(num_docs):
         for j in range(i, num_docs):
+            similarity = float('nan')
             if method == "cosine":
                 similarity = cosine_similarity(text_vectors[i], text_vectors[j])
             elif method == "dice":
@@ -376,9 +380,11 @@ def menu_eliminate_document(cursor):
             print("Invalid choice. Please select a valid option.")
 
 
-def compare_documents(cursor, id1, id2, matrix):
+def compare_documents(id1, id2, matrix):
     while True:
         print("\nDocument Comparison Menu:")
+        print("For Cosine, Dice, and Jaccard, a value of 0 means no similarity, and 1 means a complete match.")
+        print("For Euclidean and Manhattan, the closer the value is to 0, the better the similarity.")
         print("1. Cosine Similarity")
         print("2. Dice Similarity")
         print("3. Jaccard Similarity")
@@ -425,6 +431,8 @@ def show_similarity_matrixInterface(cursor, vectorizer):
 
     method = st.selectbox(
         'Select a method for similarity measurement:',
+        'For Cosine, Dice, and Jaccard, a value of 0 means no similarity, and 1 means a complete match.',
+        'For Euclidean and Manhattan, the closer the value is to 0, the better the similarity.',
         ['cosine', 'dice', 'jaccard', 'euclidean', 'manhattan']
     )
 
@@ -479,15 +487,17 @@ def query_relevant_documentsInterface(query, texts, vectorizer, method, top_n=5)
         top_indices = np.argsort(similarities)[-top_n:][::-1]  # Descending order for similarities
 
     print(f"Top indices: {top_indices}")
-    print(f"URLs length: {len(urls)}")
+    print(f"URLs length: {len(document_urls)}")
 
-    results = [(urls[i], similarities[i]) for i in top_indices if i < len(urls)]
+    results = [(document_urls[i], similarities[i]) for i in top_indices if i < len(document_urls)]
     return results
 
 
-def compare_documentsInterface(cursor, id1, id2, matrix, method):
+def compare_documents_interface(id1, id2, matrix, method):
     vector_a = matrix[id1]
     vector_b = matrix[id2]
+
+    similarity = float('nan')
 
     if method == 'cosine':
         similarity = cosine_similarity(vector_a, vector_b)
@@ -508,7 +518,7 @@ def initialize_database():
     cursor = db.cursor()
 
     if not check_if_documents_exist(cursor):
-        for url in urls:
+        for url in document_urls:
             if not document_exists(cursor, url):
                 text = fetch_and_extract_text(url)
                 processed_text = preprocess_text(text)

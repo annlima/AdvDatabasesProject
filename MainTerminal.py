@@ -1,9 +1,15 @@
 from sklearn.feature_extraction.text import TfidfVectorizer
-from Queries import close_db
+
 from DocumentProcessing import initialize_database, build_corpus_from_db, main_menu
+from Queries import close_db
 
 
 def main():
+    """
+    Main function to initiate the program.
+
+    :return: None
+    """
     db, cursor = initialize_database()
 
     try:

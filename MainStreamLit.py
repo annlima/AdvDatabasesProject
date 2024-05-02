@@ -1,14 +1,18 @@
-import pandas as pd
 import streamlit as st
 from sklearn.feature_extraction.text import TfidfVectorizer
 
 from DocumentProcessing import initialize_database, build_corpus_from_db, add_document_by_text, add_document_by_link, \
-    compare_documentsInterface, show_term_document_matrixInterface, query_relevant_documentsInterface, \
+    compare_documents_interface, show_term_document_matrixInterface, query_relevant_documentsInterface, \
     show_similarity_matrixInterface
 from Queries import *
 
 
 def main():
+    """
+    Main method for Document Management System application.
+
+    :return: None
+    """
     db, cursor = initialize_database()
 
     try:
@@ -16,7 +20,7 @@ def main():
         texts = build_corpus_from_db(cursor)
 
         if texts:
-            tfidf_matrix = tfidf_vectorizer.fit_transform(texts)
+            tfidf_vectorizer.fit_transform(texts)
             st.title('Document Management System')
             options = ["Add Document (Text)", "Add Document (Link)", "Eliminate document", "View Documents",
                        "Compare Documents", "Show Term-Document Matrix",
@@ -67,7 +71,7 @@ def main():
                                       ['cosine', 'dice', 'jaccard', 'euclidean', 'manhattan'])
                 if st.button('Compare'):
                     tfidf_matrix = tfidf_vectorizer.fit_transform(texts)
-                    similarity = compare_documentsInterface(cursor, doc_id1, doc_id2, tfidf_matrix.toarray(), method)
+                    similarity = compare_documents_interface(doc_id1, doc_id2, tfidf_matrix.toarray(), method)
                     st.write(f"The {method} similarity between documents is {similarity:.2f}")
 
             if choice == "Show Term-Document Matrix":
