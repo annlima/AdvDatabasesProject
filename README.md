@@ -55,9 +55,4 @@ Before you start, ensure you have the following installed:
 
 Contributions to improve the Document Management System are welcome. Before contributing, please ensure to follow the coding conventions and pull request process.
 
-## License
-
-This project is licensed under the MIT License - see the [LICENSE.md](LICENSE.md) file for details.
-```
-
 This README file provides a good starting point for anyone looking to understand or contribute to the project. It details the system's capabilities, setup instructions, usage guidelines, and ways to contribute, making it comprehensive for diverse GitHub users.
