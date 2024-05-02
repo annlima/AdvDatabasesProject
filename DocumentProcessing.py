@@ -70,21 +70,6 @@ document_urls = [
     "https://en.wikipedia.org/wiki/Public_health_law"
 ]
 
-
-def plot_similarities(urls, similarities):
-    # Sorting the documents by similarity score for better visualization
-    urls, similarities = zip(*sorted(zip(urls, similarities), key=lambda x: x[1], reverse=True))
-
-    plt.figure(figsize=(10, 5))
-    plt.bar(urls, similarities, color='blue')
-    plt.xlabel('Documents')
-    plt.ylabel('Similarity Score')
-    plt.title('Document Similarity')
-    plt.xticks(rotation=90)  # Rotate document labels for better readability
-    plt.tight_layout()  # Adjust layout to make room for label rotation
-    plt.show()
-
-
 def query_relevant_documents(query, texts, vectorizer, top_n=5):
     while True:
         print("\nSelect a method:")
@@ -461,7 +446,6 @@ def show_term_document_matrixInterface(cursor):
     # Populate the DataFrame with frequency data
     frequencies = fetch_all_frequencies(cursor)
     for doc_id, term_id, frequency in frequencies:
-        # Ensure to use the correct column identifier with 'T' prefix
         term_column = f"T{term_id}"
         if doc_id in matrix_df.index and term_column in matrix_df.columns:
             matrix_df.at[doc_id, term_column] = frequency
