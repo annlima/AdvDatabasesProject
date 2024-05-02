@@ -1,15 +1,20 @@
 import collections
 import requests
+import streamlit as st
+import numpy as np
+import pandas as pd
 from bs4 import BeautifulSoup
 import spacy
 from sklearn.feature_extraction.text import TfidfVectorizer, CountVectorizer
 from sklearn.decomposition import TruncatedSVD
 from Queries import *
 from Formulas import *
+import matplotlib.pyplot as plt
+
 
 # Load the English NLP model
 nlp = spacy.load("en_core_web_sm")
-
+vectorizer = TfidfVectorizer()
 def fetch_and_extract_text(url):
     response = requests.get(url)
     response.raise_for_status()
@@ -65,6 +70,20 @@ urls = [
 ]
 
 
+def plot_similarities(urls, similarities):
+    # Sorting the documents by similarity score for better visualization
+    urls, similarities = zip(*sorted(zip(urls, similarities), key=lambda x: x[1], reverse=True))
+
+    plt.figure(figsize=(10, 5))
+    plt.bar(urls, similarities, color='blue')
+    plt.xlabel('Documents')
+    plt.ylabel('Similarity Score')
+    plt.title('Document Similarity')
+    plt.xticks(rotation=90)  # Rotate document labels for better readability
+    plt.tight_layout()  # Adjust layout to make room for label rotation
+    plt.show()
+
+
 def query_relevant_documents(query, texts, vectorizer, top_n=5):
     while True:
         print("\nSelect a method:")
@@ -112,6 +131,7 @@ def query_relevant_documents(query, texts, vectorizer, top_n=5):
         results = [(urls[i], similarities[i]) for i in top_indices]
         for url, similarity in results:
             print(f"URL: {url}, Similarity: {similarity}")
+        # plot_similarities(urls, similarities)
 
 
 def main_menu(db, matrix, vectorizer):
@@ -230,7 +250,12 @@ def create_similarity_matrix(texts, vectorizer, method):
 
 def add_document_by_text(cursor, text):
     if not document_exists(cursor, text, by_text=True):
-        insert_document(cursor, text)
+        doc_id = insert_document(cursor, text)
+        terms = preprocess_text(text)
+        term_frequencies = collections.Counter(terms)
+        for term, freq in term_frequencies.items():
+            term_id = get_or_create_term_id(cursor, term)
+            insert_or_update_frequency(cursor, doc_id, term_id, freq)
     else:
         print("Document already exists in the database.")
 
@@ -238,7 +263,12 @@ def add_document_by_text(cursor, text):
 def add_document_by_link(cursor, link):
     text = fetch_and_extract_text(link)
     if not document_exists(cursor, link):
-        insert_document(cursor, text, link)
+        doc_id = insert_document(cursor, text, link)
+        terms = preprocess_text(text)
+        term_frequencies = collections.Counter(terms)
+        for term, freq in term_frequencies.items():
+            term_id = get_or_create_term_id(cursor, term)
+            insert_or_update_frequency(cursor, doc_id, term_id, freq)
     else:
         print("Document already exists in the database.")
 
@@ -263,7 +293,7 @@ def show_term_document_matrix(cursor):
     for row in matrix:
         total_terms = sum(row)
         if total_terms > 0:
-            normalized_row = [round((freq / total_terms), 2) for freq in row]  # Use percentage normalization
+            normalized_row = [round((freq / total_terms), 2) for freq in row]
         else:
             normalized_row = [0] * len(row)  # Ensure all zeros if no terms
         normalized_matrix.append(normalized_row)
@@ -274,9 +304,6 @@ def show_term_document_matrix(cursor):
     print("\t" + "\t".join(headers))
     for (doc_id, _, _), row in zip(documents, normalized_matrix):
         print(f"Doc {doc_id}:\t" + "\t".join(f"{freq}" if freq != 0 else "0" for freq in row))
-
-
-
 
 
 def compare_with_all_documents(db, matrix):
@@ -380,6 +407,110 @@ def add_document_with_terms_and_frequencies(cursor, text, url=None):
         insert_or_update_frequency(cursor, doc_id, term_id, freq)
 
 
+def show_similarity_matrixInterface(cursor, vectorizer):
+    texts = build_corpus_from_db(cursor)
+    documents = fetch_all_documents(cursor)
+    if not texts:
+        st.write("No documents available to create similarity matrix.")
+        return None
+
+    method = st.selectbox(
+        'Select a method for similarity measurement:',
+        ['cosine', 'dice', 'jaccard', 'euclidean', 'manhattan']
+    )
+
+    similarity_matrix = create_similarity_matrix(texts, vectorizer, method)
+
+    # Prepare the data for display
+    headers = [f"Doc{doc_id}" for doc_id, _, _ in documents]
+    df = pd.DataFrame(similarity_matrix, index=headers, columns=headers)
+
+    # Display the similarity matrix
+    st.write("Similarity Matrix:")
+    st.dataframe(df.style.format("{:.2f}"))
+
+
+def show_term_document_matrixInterface(cursor):
+    documents = fetch_all_documents(cursor)
+    terms = fetch_all_terms(cursor)
+
+    # Create index and columns for the DataFrame
+    index = [doc_id for doc_id, _, _ in documents]
+    columns = [f"T{term_id}" for term_id, _ in terms]
+
+    # Initialize the DataFrame with zeros
+    matrix_df = pd.DataFrame(0, index=index, columns=columns)
+
+    # Populate the DataFrame with frequency data
+    frequencies = fetch_all_frequencies(cursor)
+    for doc_id, term_id, frequency in frequencies:
+        # Ensure to use the correct column identifier with 'T' prefix
+        term_column = f"T{term_id}"
+        if doc_id in matrix_df.index and term_column in matrix_df.columns:
+            matrix_df.at[doc_id, term_column] = frequency
+
+    # Normalize the frequencies to show proportions
+    if not matrix_df.empty and matrix_df.sum(axis=1).sum() > 0:  # Only normalize if there is data to normalize
+        matrix_df = matrix_df.div(matrix_df.sum(axis=1), axis=0).fillna(0)
+
+    return matrix_df
+
+
+def query_relevant_documentsInterface(query, texts, vectorizer, method, top_n=5):
+    if not query:
+        return []  # Return empty if no query is provided
+
+    # Preprocess and vectorize the query
+    query_processed = preprocess_text(query)
+    query_vector = vectorizer.transform([query_processed]).toarray().ravel()
+
+    # Transform texts to vectors and ensure they are flat
+    text_vectors = vectorizer.transform(texts).toarray()
+
+    similarities = []
+    for text_vector in text_vectors:
+        if method == "cosine":
+            similarity = cosine_similarity(query_vector, text_vector.ravel())
+        elif method == "dice":
+            similarity = dice_similarity(query_vector, text_vector.ravel())
+        elif method == "jaccard":
+            similarity = jaccard_similarity(query_vector, text_vector.ravel())
+        elif method == "euclidean":
+            similarity = euclidean_distance(query_vector, text_vector.ravel())
+        elif method == "manhattan":
+            similarity = manhattan_distance(query_vector, text_vector.ravel())
+        similarities.append(similarity)
+
+    print(f"Total documents compared: {len(similarities)}")
+    if method in ['euclidean', 'manhattan']:
+        top_indices = np.argsort(similarities)[:top_n]  # Ascending order for distances
+    else:
+        top_indices = np.argsort(similarities)[-top_n:][::-1]  # Descending order for similarities
+
+    print(f"Top indices: {top_indices}")
+    print(f"URLs length: {len(urls)}")
+
+    results = [(urls[i], similarities[i]) for i in top_indices if i < len(urls)]
+    return results
+
+
+def compare_documentsInterface(cursor, id1, id2, matrix, method):
+    vectorA = matrix[id1]
+    vectorB = matrix[id2]
+
+    if method == 'cosine':
+        similarity = cosine_similarity(vectorA, vectorB)
+    elif method == 'dice':
+        similarity = dice_similarity(vectorA, vectorB)
+    elif method == 'jaccard':
+        similarity = jaccard_similarity(vectorA, vectorB)
+    elif method == 'euclidean':
+        similarity = euclidean_distance(vectorA, vectorB)
+    elif method == 'manhattan':
+        similarity = manhattan_distance(vectorA, vectorB)
+
+    return similarity
+
 def main():
     db = connect_db()
     cursor = db.cursor()
@@ -399,11 +530,79 @@ def main():
         print("Database already has documents.")
 
     try:
-        texts = build_corpus_from_db(cursor)
         tfidf_vectorizer = TfidfVectorizer()
+        texts = build_corpus_from_db(cursor)
+
         if texts:
             tfidf_matrix = tfidf_vectorizer.fit_transform(texts)
-            main_menu(db, tfidf_matrix.toarray(), tfidf_vectorizer)
+            st.title('Document Management System')
+            options = ["Add Document (Text)", "Add Document (Link)", "View Documents",
+                       "Compare Documents", "Show Term-Document Matrix",
+                       "Query Document Relevance", "Show Similarity Matrix", "Exit"]
+            choice = st.sidebar.selectbox("Choose an option", options)
+
+            if choice == "Add Document (Text)":
+                doc_text = st.text_area("Enter document text:")
+                if st.button('Add Document'):
+                    add_document_by_text(cursor, doc_text)
+                    db.commit()
+                    st.success("Document added successfully!")
+                    list_documents(cursor)
+
+            elif choice == "Add Document (Link)":
+                doc_link = st.text_input("Enter document link:")
+                if st.button('Fetch and Add Document'):
+                    add_document_by_link(cursor, doc_link)
+                    db.commit()
+                    st.success("Document fetched and added successfully!")
+                    list_documents(cursor)
+
+            elif choice == "View Documents":
+                documents_df = list_documentsforInterface(cursor)
+                if not documents_df.empty:
+                    st.dataframe(documents_df)
+                else:
+                    st.write("No documents found.")
+
+            elif choice == "Compare Documents":
+                doc_id1 = st.number_input("Enter first document ID:", min_value=1, format="%d")
+                doc_id2 = st.number_input("Enter second document ID:", min_value=1, format="%d")
+                method = st.selectbox('Select Comparison Method', ['cosine', 'dice', 'jaccard', 'euclidean', 'manhattan'])
+                if st.button('Compare'):
+                    tfidf_matrix = tfidf_vectorizer.fit_transform(texts)
+                    similarity = compare_documentsInterface(cursor, doc_id1, doc_id2, tfidf_matrix.toarray(), method)
+                    st.write(f"The {method} similarity between documents is {similarity:.2f}")
+
+            if choice == "Show Term-Document Matrix":
+                matrix_df = show_term_document_matrixInterface(cursor)
+                if not matrix_df.empty:
+                    st.dataframe(matrix_df.style.format("{:.2%}"), height=600)
+                else:
+                    st.write("No term-document matrix available.")
+
+            if choice == "Query Document Relevance":
+                query = st.text_input("Enter a query:")
+                method = st.selectbox(
+                    'Select a method:',
+                    ['cosine', 'dice', 'jaccard', 'euclidean', 'manhattan']
+                )
+                if st.button('Search') and query:
+                    results = query_relevant_documentsInterface(query, texts, tfidf_vectorizer, method)
+                    if results:
+                        df = pd.DataFrame(results, columns=['URL', 'Similarity'])
+                        st.dataframe(df)
+                    else:
+                        st.write("No relevant documents found or no query entered.")
+
+
+            elif choice == "Show Similarity Matrix":
+                show_similarity_matrixInterface(cursor, tfidf_vectorizer)
+
+
+            elif choice == "Exit":
+                st.write("Exiting the application.")
+                close_db(db)
+                st.stop()
         else:
             print("No sufficient text data to create TF-IDF matrix.")
     finally:
