@@ -4,7 +4,7 @@ def connect_db():
     return mysql.connector.connect(
         host="localhost",
         user="root",
-        passwd="bebitamimi",
+        passwd="root",
         database="DocumentDatabase"
     )
 
