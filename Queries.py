@@ -1,4 +1,5 @@
 import mysql.connector
+import pandas as pd
 
 def connect_db():
     return mysql.connector.connect(
@@ -64,6 +65,16 @@ def list_documents(cursor):
             print(f"ID: {doc_id}, Title: {title}")
     else:
         print("No documents found.")
+
+def list_documentsforInterface(cursor):
+    query = "SELECT doc_id, doc_title FROM Documents"
+    cursor.execute(query)
+    documents = cursor.fetchall()
+    if documents:
+        df = pd.DataFrame(documents, columns=['Document ID', 'Title'])
+        return df
+    else:
+        return pd.DataFrame()  # Return an empty DataFrame if no documents are found
 
 def comparate_list_documents(cursor):
     query = "SELECT doc_id, doc_title FROM Documents"
