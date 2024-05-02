@@ -1,20 +1,21 @@
 import collections
-import requests
-import streamlit as st
-import numpy as np
-import pandas as pd
-from bs4 import BeautifulSoup
-import spacy
-from sklearn.feature_extraction.text import TfidfVectorizer, CountVectorizer
-from sklearn.decomposition import TruncatedSVD
-from Queries import *
-from Formulas import *
-import matplotlib.pyplot as plt
 
+import matplotlib.pyplot as plt
+import requests
+import spacy
+import streamlit as st
+from bs4 import BeautifulSoup
+from sklearn.decomposition import TruncatedSVD
+from sklearn.feature_extraction.text import TfidfVectorizer
+
+from Formulas import *
+from Queries import *
 
 # Load the English NLP model
 nlp = spacy.load("en_core_web_sm")
 vectorizer = TfidfVectorizer()
+
+
 def fetch_and_extract_text(url):
     response = requests.get(url)
     response.raise_for_status()
@@ -41,11 +42,11 @@ def build_corpus_from_db(cursor):
 
 def create_lsi_model(texts, num_topics=10):
     vectorizer = TfidfVectorizer()
-    X = vectorizer.fit_transform(texts)
+    x = vectorizer.fit_transform(texts)
 
     # Apply Truncated SVD (LSI)
     svd_model = TruncatedSVD(n_components=num_topics)
-    svd_model.fit(X)
+    svd_model.fit(x)
 
     terms = vectorizer.get_feature_names_out()
     for i, comp in enumerate(svd_model.components_):
@@ -99,32 +100,13 @@ def query_relevant_documents(query, texts, vectorizer, top_n=5):
             break
 
         method = "cosine" if method_choice == "1" else \
-                  "dice" if method_choice == "2" else \
-                  "jaccard" if method_choice == "3" else \
-                  "euclidean" if method_choice == "4" else \
-                  "manhattan"
+            "dice" if method_choice == "2" else \
+                "jaccard" if method_choice == "3" else \
+                    "euclidean" if method_choice == "4" else \
+                        "manhattan"
 
         # Preprocess and vectorize the query
-        query_processed = preprocess_text(query)
-        query_vector = vectorizer.transform([query_processed]).toarray().ravel()  # Flatten the vector
-
-        # Transform texts to vectors and ensure they are flat
-        text_vectors = vectorizer.transform(texts).toarray()
-
-        similarities = []
-        for text_vector in text_vectors:
-            if method == "cosine":
-                similarity = cosine_similarity(query_vector, text_vector.ravel())  # Flatten the vector
-            elif method == "dice":
-                similarity = dice_similarity(query_vector, text_vector.ravel())
-            elif method == "jaccard":
-                similarity = jaccard_similarity(query_vector, text_vector.ravel())
-            elif method == "euclidean":
-                similarity = euclidean_distance(query_vector, text_vector.ravel())
-            elif method == "manhattan":
-                similarity = manhattan_distance(query_vector, text_vector.ravel())
-
-            similarities.append(similarity)
+        similarities = calculate_similarities(query, texts, vectorizer, method)
 
         # Get the top N indices of the most similar documents
         top_indices = np.argsort(similarities)[-top_n:]
@@ -132,6 +114,31 @@ def query_relevant_documents(query, texts, vectorizer, top_n=5):
         for url, similarity in results:
             print(f"URL: {url}, Similarity: {similarity}")
         # plot_similarities(urls, similarities)
+
+
+def calculate_similarities(query, texts, vectorizer, method):
+    query_processed = preprocess_text(query)
+    query_vector = vectorizer.transform([query_processed]).toarray().ravel()  # Flatten the vector
+
+    # Transform texts to vectors and ensure they are flat
+    text_vectors = vectorizer.transform(texts).toarray()
+
+    similarities = []
+    for text_vector in text_vectors:
+        if method == "cosine":
+            similarity = cosine_similarity(query_vector, text_vector.ravel())  # Flatten the vector
+        elif method == "dice":
+            similarity = dice_similarity(query_vector, text_vector.ravel())
+        elif method == "jaccard":
+            similarity = jaccard_similarity(query_vector, text_vector.ravel())
+        elif method == "euclidean":
+            similarity = euclidean_distance(query_vector, text_vector.ravel())
+        elif method == "manhattan":
+            similarity = manhattan_distance(query_vector, text_vector.ravel())
+
+        similarities.append(similarity)
+
+    return similarities
 
 
 def main_menu(db, matrix, vectorizer):
@@ -189,6 +196,7 @@ def handle_menu_choice(db, choice, matrix, vectorizer):
     finally:
         cursor.close()
 
+
 def show_similarity_matrix(cursor, vectorizer):
     texts = build_corpus_from_db(cursor)
     documents = fetch_all_documents(cursor)
@@ -204,10 +212,10 @@ def show_similarity_matrix(cursor, vectorizer):
     print("5. Manhattan Distance")
     choice = input("Enter your choice: ")
     method = "cosine" if choice == "1" else \
-             "dice" if choice == "2" else \
-             "jaccard" if choice == "3" else \
-             "euclidean" if choice == "4" else \
-             "manhattan"
+        "dice" if choice == "2" else \
+            "jaccard" if choice == "3" else \
+                "euclidean" if choice == "4" else \
+                    "manhattan"
 
     similarity_matrix = create_similarity_matrix(texts, vectorizer, method)
 
@@ -247,6 +255,7 @@ def create_similarity_matrix(texts, vectorizer, method):
             similarity_matrix[i, j] = similarity_matrix[j, i] = similarity
 
     return similarity_matrix
+
 
 def add_document_by_text(cursor, text):
     if not document_exists(cursor, text, by_text=True):
@@ -308,7 +317,7 @@ def show_term_document_matrix(cursor):
 
 def compare_with_all_documents(db, matrix):
     cursor = db.cursor()
-    documents = comparate_list_documents(cursor)  # Fetch list of all documents
+    documents = compare_list_documents(cursor)  # Fetch a list of all documents
     if not documents:
         print("No documents available for comparison.")
         return
@@ -359,10 +368,10 @@ def menu_eliminate_document(cursor):
 
         if choice == '1':
             doc_id = input("Enter the document ID: ")
-            eliminate_document_byid(cursor, doc_id)
+            eliminate_document_by_id(cursor, doc_id)
         elif choice == '2':
             title = input("Enter the document title: ")
-            eliminate_document_bytitle(cursor, title)
+            eliminate_document_by_title(cursor, title)
         else:
             print("Invalid choice. Please select a valid option.")
 
@@ -381,19 +390,19 @@ def compare_documents(cursor, id1, id2, matrix):
         if choice == '9':
             break
 
-        vectorA = matrix[id1]
-        vectorB = matrix[id2]
+        vector_a = matrix[id1]
+        vector_b = matrix[id2]
 
         if choice == '1':
-            print(f"Cosine Similarity: {cosine_similarity(vectorA, vectorB)}")
+            print(f"Cosine Similarity: {cosine_similarity(vector_a, vector_b)}")
         elif choice == '2':
-            print(f"Dice Similarity: {dice_similarity(vectorA, vectorB)}")
+            print(f"Dice Similarity: {dice_similarity(vector_a, vector_b)}")
         elif choice == '3':
-            print(f"Jaccard Similarity: {jaccard_similarity(vectorA, vectorB)}")
+            print(f"Jaccard Similarity: {jaccard_similarity(vector_a, vector_b)}")
         elif choice == '4':
-            print(f"Euclidean Distance: {euclidean_distance(vectorA, vectorB)}")
+            print(f"Euclidean Distance: {euclidean_distance(vector_a, vector_b)}")
         elif choice == '5':
-            print(f"Manhattan Distance: {manhattan_distance(vectorA, vectorB)}")
+            print(f"Manhattan Distance: {manhattan_distance(vector_a, vector_b)}")
         else:
             print("Invalid choice. Please select a valid option.")
 
@@ -461,25 +470,7 @@ def query_relevant_documentsInterface(query, texts, vectorizer, method, top_n=5)
         return []  # Return empty if no query is provided
 
     # Preprocess and vectorize the query
-    query_processed = preprocess_text(query)
-    query_vector = vectorizer.transform([query_processed]).toarray().ravel()
-
-    # Transform texts to vectors and ensure they are flat
-    text_vectors = vectorizer.transform(texts).toarray()
-
-    similarities = []
-    for text_vector in text_vectors:
-        if method == "cosine":
-            similarity = cosine_similarity(query_vector, text_vector.ravel())
-        elif method == "dice":
-            similarity = dice_similarity(query_vector, text_vector.ravel())
-        elif method == "jaccard":
-            similarity = jaccard_similarity(query_vector, text_vector.ravel())
-        elif method == "euclidean":
-            similarity = euclidean_distance(query_vector, text_vector.ravel())
-        elif method == "manhattan":
-            similarity = manhattan_distance(query_vector, text_vector.ravel())
-        similarities.append(similarity)
+    similarities = calculate_similarities(query, texts, vectorizer, method)
 
     print(f"Total documents compared: {len(similarities)}")
     if method in ['euclidean', 'manhattan']:
@@ -495,23 +486,24 @@ def query_relevant_documentsInterface(query, texts, vectorizer, method, top_n=5)
 
 
 def compare_documentsInterface(cursor, id1, id2, matrix, method):
-    vectorA = matrix[id1]
-    vectorB = matrix[id2]
+    vector_a = matrix[id1]
+    vector_b = matrix[id2]
 
     if method == 'cosine':
-        similarity = cosine_similarity(vectorA, vectorB)
+        similarity = cosine_similarity(vector_a, vector_b)
     elif method == 'dice':
-        similarity = dice_similarity(vectorA, vectorB)
+        similarity = dice_similarity(vector_a, vector_b)
     elif method == 'jaccard':
-        similarity = jaccard_similarity(vectorA, vectorB)
+        similarity = jaccard_similarity(vector_a, vector_b)
     elif method == 'euclidean':
-        similarity = euclidean_distance(vectorA, vectorB)
+        similarity = euclidean_distance(vector_a, vector_b)
     elif method == 'manhattan':
-        similarity = manhattan_distance(vectorA, vectorB)
+        similarity = manhattan_distance(vector_a, vector_b)
 
     return similarity
 
-def main():
+
+def initialize_database():
     db = connect_db()
     cursor = db.cursor()
 
@@ -529,86 +521,4 @@ def main():
     else:
         print("Database already has documents.")
 
-    try:
-        tfidf_vectorizer = TfidfVectorizer()
-        texts = build_corpus_from_db(cursor)
-
-        if texts:
-            tfidf_matrix = tfidf_vectorizer.fit_transform(texts)
-            st.title('Document Management System')
-            options = ["Add Document (Text)", "Add Document (Link)", "View Documents",
-                       "Compare Documents", "Show Term-Document Matrix",
-                       "Query Document Relevance", "Show Similarity Matrix", "Exit"]
-            choice = st.sidebar.selectbox("Choose an option", options)
-
-            if choice == "Add Document (Text)":
-                doc_text = st.text_area("Enter document text:")
-                if st.button('Add Document'):
-                    add_document_by_text(cursor, doc_text)
-                    db.commit()
-                    st.success("Document added successfully!")
-                    list_documents(cursor)
-
-            elif choice == "Add Document (Link)":
-                doc_link = st.text_input("Enter document link:")
-                if st.button('Fetch and Add Document'):
-                    add_document_by_link(cursor, doc_link)
-                    db.commit()
-                    st.success("Document fetched and added successfully!")
-                    list_documents(cursor)
-
-            elif choice == "View Documents":
-                documents_df = list_documentsforInterface(cursor)
-                if not documents_df.empty:
-                    st.dataframe(documents_df)
-                else:
-                    st.write("No documents found.")
-
-            elif choice == "Compare Documents":
-                doc_id1 = st.number_input("Enter first document ID:", min_value=1, format="%d")
-                doc_id2 = st.number_input("Enter second document ID:", min_value=1, format="%d")
-                method = st.selectbox('Select Comparison Method', ['cosine', 'dice', 'jaccard', 'euclidean', 'manhattan'])
-                if st.button('Compare'):
-                    tfidf_matrix = tfidf_vectorizer.fit_transform(texts)
-                    similarity = compare_documentsInterface(cursor, doc_id1, doc_id2, tfidf_matrix.toarray(), method)
-                    st.write(f"The {method} similarity between documents is {similarity:.2f}")
-
-            if choice == "Show Term-Document Matrix":
-                matrix_df = show_term_document_matrixInterface(cursor)
-                if not matrix_df.empty:
-                    st.dataframe(matrix_df.style.format("{:.2%}"), height=600)
-                else:
-                    st.write("No term-document matrix available.")
-
-            if choice == "Query Document Relevance":
-                query = st.text_input("Enter a query:")
-                method = st.selectbox(
-                    'Select a method:',
-                    ['cosine', 'dice', 'jaccard', 'euclidean', 'manhattan']
-                )
-                if st.button('Search') and query:
-                    results = query_relevant_documentsInterface(query, texts, tfidf_vectorizer, method)
-                    if results:
-                        df = pd.DataFrame(results, columns=['URL', 'Similarity'])
-                        st.dataframe(df)
-                    else:
-                        st.write("No relevant documents found or no query entered.")
-
-
-            elif choice == "Show Similarity Matrix":
-                show_similarity_matrixInterface(cursor, tfidf_vectorizer)
-
-
-            elif choice == "Exit":
-                st.write("Exiting the application.")
-                close_db(db)
-                st.stop()
-        else:
-            print("No sufficient text data to create TF-IDF matrix.")
-    finally:
-        cursor.close()
-        close_db(db)
-
-
-if __name__ == "__main__":
-    main()
+    return db, cursor

@@ -1,4 +1,4 @@
-# Advanced Databases Project 
+# Advanced Databases Project
 
 ## Installation
 
@@ -14,7 +14,7 @@
    ```
 
 3. **Set up the MySQL database:**
-   - Execute the provided SQL script to create and configure the database.
+    - Execute the provided SQL script to create and configure the database.
 
 ## Usage
 
@@ -24,9 +24,9 @@
    ```
 
 2. **Follow the on-screen menu to interact with the system:**
-   - Add documents by text or URL.
-   - Compare documents using various similarity metrics.
-   - View and manage the document list and term-document matrix.
+    - Add documents by text or URL.
+    - Compare documents using various similarity metrics.
+    - View and manage the document list and term-document matrix.
 
 ## Configurations
 
