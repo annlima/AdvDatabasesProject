@@ -24,16 +24,23 @@ def insert_document(cursor, text, url=None):
 
 
 def eliminate_document_by_id(cursor, doc_id):
-    query = "DELETE FROM Documents WHERE doc_id = %s"
-    cursor.execute(query, (doc_id,))
-    print("Document deleted successfully.")
+    cursor.execute("DELETE FROM Frequencies WHERE doc_id = %s", (doc_id,))
+    cursor.execute("DELETE FROM Documents WHERE doc_id = %s", (doc_id,))
+    delete_unreferenced_terms(cursor)
+    print("Document and related data deleted successfully.")
 
 
 def eliminate_document_by_title(cursor, title):
-    query = "DELETE FROM Documents WHERE doc_title = %s"
-    cursor.execute(query, (title,))
-    print("Document deleted successfully.")
+    cursor.execute("SELECT doc_id FROM Documents WHERE doc_title = %s", (title,))
+    doc_id = cursor.fetchone()
+    if doc_id:
+        eliminate_document_by_id(cursor, doc_id[0])
+    else:
+        print("Document not found.")
 
+def delete_unreferenced_terms(cursor):
+    cursor.execute("DELETE FROM Terms WHERE term_id NOT IN (SELECT DISTINCT term_id FROM Frequencies)")
+    print("Unreferenced terms deleted successfully.")
 
 def insert_terms(cursor, term_data):
     insert_term = "INSERT INTO Terms (term_id, term_text) VALUES (%s, %s)"

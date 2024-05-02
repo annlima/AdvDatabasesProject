@@ -5,7 +5,7 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 from DocumentProcessing import initialize_database, build_corpus_from_db, add_document_by_text, add_document_by_link, \
     compare_documentsInterface, show_term_document_matrixInterface, query_relevant_documentsInterface, \
     show_similarity_matrixInterface
-from Queries import list_documents, list_documents_for_interface, close_db
+from Queries import *
 
 
 def main():
@@ -18,7 +18,7 @@ def main():
         if texts:
             tfidf_matrix = tfidf_vectorizer.fit_transform(texts)
             st.title('Document Management System')
-            options = ["Add Document (Text)", "Add Document (Link)", "View Documents",
+            options = ["Add Document (Text)", "Add Document (Link)", "Eliminate document", "View Documents",
                        "Compare Documents", "Show Term-Document Matrix",
                        "Query Document Relevance", "Show Similarity Matrix", "Exit"]
             choice = st.sidebar.selectbox("Choose an option", options)
@@ -38,6 +38,20 @@ def main():
                     db.commit()
                     st.success("Document fetched and added successfully!")
                     list_documents(cursor)
+
+            elif choice == "Eliminate document":
+                elimination_method = st.radio("Select elimination method:", ('By ID', 'By Title'))
+                if elimination_method == 'By ID':
+                    doc_id = st.text_input("Enter Document ID to eliminate:")
+                    if st.button('Eliminate Document'):
+                        eliminate_document_by_id(cursor, doc_id)
+                        st.success(f"Document ID {doc_id} eliminated successfully!")
+                elif elimination_method == 'By Title':
+                    title = st.text_input("Enter Document Title to eliminate:")
+                    if st.button('Eliminate Document'):
+                        eliminate_document_by_title(cursor, title)
+                        st.success(f"Document titled '{title}' eliminated successfully!")
+                db.commit()
 
             elif choice == "View Documents":
                 documents_df = list_documents_for_interface(cursor)
