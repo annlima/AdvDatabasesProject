@@ -1,6 +1,3 @@
-Here's a README that you could use for the GitHub repository containing the code for your document management system. This README outlines the purpose, setup, and usage of the system effectively for users and contributors.
-
-```markdown
 # Document Management System
 
 This Document Management System (DMS) is designed to handle and analyze text documents within a MySQL database. It provides functionalities for adding, deleting, and listing documents, alongside advanced text processing and analysis capabilities. This system integrates document management with text similarity analysis using natural language processing and machine learning techniques.
