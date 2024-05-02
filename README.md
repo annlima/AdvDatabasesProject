@@ -4,7 +4,7 @@
 
 1. **Clone the repository:**
    ```bash
-   git clone <[repository-url](https://github.com/annlima/AdvDatabasesProject)>
+   git clone <(https://github.com/annlima/AdvDatabasesProject)>
    ```
 
 2. **Install required Python packages:**
