@@ -156,7 +156,7 @@ def handle_menu_choice(db, choice, matrix, vectorizer):
         elif choice == "6":
             show_term_document_matrix(cursor)
         elif choice == "7":
-            print("not implemented")
+            show_similarity_matrix(cursor, vectorizer)
         elif choice == "8":
             query = input("Enter a query: ")
             results = query_relevant_documents(query, build_corpus_from_db(cursor), vectorizer)
@@ -169,6 +169,64 @@ def handle_menu_choice(db, choice, matrix, vectorizer):
     finally:
         cursor.close()
 
+def show_similarity_matrix(cursor, vectorizer):
+    texts = build_corpus_from_db(cursor)
+    documents = fetch_all_documents(cursor)
+    if not texts:
+        print("No documents available to create similarity matrix.")
+        return
+
+    print("\nSelect a method for similarity measurement:")
+    print("1. Cosine Similarity")
+    print("2. Dice Similarity")
+    print("3. Jaccard Similarity")
+    print("4. Euclidean Distance")
+    print("5. Manhattan Distance")
+    choice = input("Enter your choice: ")
+    method = "cosine" if choice == "1" else \
+             "dice" if choice == "2" else \
+             "jaccard" if choice == "3" else \
+             "euclidean" if choice == "4" else \
+             "manhattan"
+
+    similarity_matrix = create_similarity_matrix(texts, vectorizer, method)
+
+    # Create headers using document IDs
+    headers = [f"Doc{doc_id}" for doc_id, _, _ in documents]
+    print("\nSimilarity Matrix:")
+    print("\t" + "\t".join(headers))
+    for i, row in enumerate(similarity_matrix):
+        formatted_row = "\t".join(f"{sim:.2f}" for sim in row)
+        print(f"{headers[i]}:\t{formatted_row}")
+
+
+def create_similarity_matrix(texts, vectorizer, method):
+    # Transform texts to vectors
+    text_vectors = vectorizer.transform(texts).toarray()
+
+    # Calculate the number of documents
+    num_docs = text_vectors.shape[0]
+
+    # Initialize an empty similarity matrix
+    similarity_matrix = np.zeros((num_docs, num_docs))
+
+    # Calculate similarity for each pair of documents
+    for i in range(num_docs):
+        for j in range(i, num_docs):
+            if method == "cosine":
+                similarity = cosine_similarity(text_vectors[i], text_vectors[j])
+            elif method == "dice":
+                similarity = dice_similarity(text_vectors[i], text_vectors[j])
+            elif method == "jaccard":
+                similarity = jaccard_similarity(text_vectors[i], text_vectors[j])
+            elif method == "euclidean":
+                similarity = euclidean_distance(text_vectors[i], text_vectors[j])
+            elif method == "manhattan":
+                similarity = manhattan_distance(text_vectors[i], text_vectors[j])
+            # Fill both (i, j) and (j, i) to make the matrix symmetric
+            similarity_matrix[i, j] = similarity_matrix[j, i] = similarity
+
+    return similarity_matrix
 
 def add_document_by_text(cursor, text):
     if not document_exists(cursor, text, by_text=True):
