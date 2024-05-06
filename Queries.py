@@ -26,6 +26,11 @@ def insert_document(cursor, text, url=None):
     """
     title = "Generated Title" if url is None else url.split("/")[-1]
     query = "INSERT INTO Documents (doc_url, doc_title, doc_text) VALUES (%s, %s, %s)"
+
+    # Convert list to string if text is a list
+    if isinstance(text, list):
+        text = ' '.join(text)
+
     cursor.execute(query, (url if url else "No URL", title, text))
 
     # Get the ID of the document
@@ -83,16 +88,29 @@ def delete_unreferenced_terms(cursor):
     print("Unreferenced terms deleted successfully.")
 
 
-def insert_terms(cursor, term_data):
+def insert_terms(cursor, terms):
     """
-    Insert terms into the Terms table.
+    Insert unique terms into the Terms table.
 
     :param cursor: The database cursor
-    :param term_data: the term data to insert
+    :param terms: A list of unique terms to insert
     :return: None
     """
-    insert_term = "INSERT INTO Terms (term_id, term_text) VALUES (%s, %s)"
-    cursor.executemany(insert_term, term_data)
+    # Generate term data as a list of tuples [(term_text,), (term_text,), ...]
+    term_data = [(term,) for term in terms if term]
+    if term_data:
+        for term in term_data:
+            # Check if the term already exists
+            cursor.execute("SELECT term_id FROM Terms WHERE term_text = %s", term)
+            result = cursor.fetchone()
+            if result:
+                # If it exists, return the existing term_id
+                return result[0]
+            else:
+                # If it doesn't exist, insert the new term
+                cursor.execute("INSERT INTO Terms (term_text) VALUES (%s)", term)
+                return cursor.lastrowid
+
 
 
 def insert_frequencies(cursor, frequency_data):

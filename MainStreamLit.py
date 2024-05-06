@@ -65,14 +65,11 @@ def main():
                     st.write("No documents found.")
 
             elif choice == "Compare Documents":
-                doc_id1 = st.number_input("Enter first document ID:", min_value=1, format="%d")
-                doc_id2 = st.number_input("Enter second document ID:", min_value=1, format="%d")
-                method = st.selectbox('Select Comparison Method',
-                                      ['cosine', 'dice', 'jaccard', 'euclidean', 'manhattan'])
-                if st.button('Compare'):
-                    tfidf_matrix = tfidf_vectorizer.fit_transform(texts)
-                    similarity = compare_documents_interface(doc_id1, doc_id2, tfidf_matrix.toarray(), method)
-                    st.write(f"The {method} similarity between documents is {similarity:.2f}")
+                st.subheader("For Cosine, Dice, and Jaccard, a value of 0 means no similarity, and 1 means a complete match.")
+                st.subheader("For Euclidean and Manhattan, the closer the value is to 0, the better the similarity.")
+                tfidf_matrix = tfidf_vectorizer.fit_transform(texts)
+                compare_documents_interface(cursor, tfidf_matrix.toarray())
+
 
             if choice == "Show Term-Document Matrix":
                 matrix_df = show_term_document_matrixInterface(cursor)
@@ -82,13 +79,15 @@ def main():
                     st.write("No term-document matrix available.")
 
             if choice == "Query Document Relevance":
+                st.subheader("For Cosine, Dice, and Jaccard, a value of 0 means no similarity, and 1 means a complete match.")
+                st.subheader("For Euclidean and Manhattan, the closer the value is to 0, the better the similarity.")
                 query = st.text_input("Enter a query:")
                 method = st.selectbox(
                     'Select a method:',
                     ['cosine', 'dice', 'jaccard', 'euclidean', 'manhattan']
                 )
                 if st.button('Search') and query:
-                    results = query_relevant_documentsInterface(query, texts, tfidf_vectorizer, method)
+                    results = query_relevant_documentsInterface(cursor, query, texts, tfidf_vectorizer, method)
                     if results:
                         df = pd.DataFrame(results, columns=['URL', 'Similarity'])
                         st.dataframe(df)
@@ -96,6 +95,8 @@ def main():
                         st.write("No relevant documents found or no query entered.")
 
             elif choice == "Show Similarity Matrix":
+                st.subheader("For Cosine, Dice, and Jaccard, a value of 0 means no similarity, and 1 means a complete match.")
+                st.subheader("For Euclidean and Manhattan, the closer the value is to 0, the better the similarity.")
                 show_similarity_matrixInterface(cursor, tfidf_vectorizer)
 
             elif choice == "Exit":

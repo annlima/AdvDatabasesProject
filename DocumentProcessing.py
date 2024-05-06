@@ -1,6 +1,5 @@
 import collections
-
-import matplotlib.pyplot as plt
+import time
 import requests
 import spacy
 import streamlit as st
@@ -25,7 +24,13 @@ def fetch_and_extract_text(url):
 
 def preprocess_text(text):
     doc = nlp(text)
-    return " ".join([token.lemma_ for token in doc if token.is_alpha and not token.is_stop])
+    return [token.lemma_ for token in doc if token.is_alpha and not token.is_stop]
+
+
+def preprocess_text_similar(text):
+    doc = nlp(text)
+    lemmatized_text = [token.lemma_ for token in doc if token.is_alpha and not token.is_stop]
+    return ' '.join(lemmatized_text)  # Return a single string
 
 
 def build_corpus_from_db(cursor):
@@ -36,6 +41,7 @@ def build_corpus_from_db(cursor):
             processed_text = preprocess_text(fetch_and_extract_text(url))
         else:
             processed_text = preprocess_text(text)
+        processed_text = ' '.join(processed_text)
         texts.append(processed_text)
     return texts
 
@@ -70,7 +76,8 @@ document_urls = [
     "https://en.wikipedia.org/wiki/Public_health_law"
 ]
 
-def query_relevant_documents(query, texts, vectorizer, top_n=5):
+
+def query_relevant_documents(query, texts, vectorizer, cursor, top_n=5):
     while True:
         print("\nSelect a method:")
         print("For Cosine, Dice, and Jaccard, a value of 0 means no similarity, and 1 means a complete match.")
@@ -97,21 +104,26 @@ def query_relevant_documents(query, texts, vectorizer, top_n=5):
 
         # Get the top N indices of the most similar documents
         top_indices = np.argsort(similarities)[-top_n:]
-        results = [(document_urls[i], similarities[i]) for i in top_indices]
+
+        # Fetch all documents from the database
+        documents = fetch_all_documents(cursor)
+
+        results = [(documents[i][1], similarities[i]) for i in top_indices]
         for url, similarity in results:
-            print(f"URL: {url}, Similarity: {similarity}")
-        # plot_similarities(urls, similarities)
+            print(f"URL: {url}, Similarity/Dissimilarity: {similarity}")
 
 
 def calculate_similarities(query, texts, vectorizer, method):
-    query_processed = preprocess_text(query)
-    query_vector = vectorizer.transform([query_processed]).toarray().ravel()  # Flatten the vector
+    # Preprocess and convert the query to a string suitable for vectorization
+    query_processed = preprocess_text_similar(query)
+    query_vector = vectorizer.transform([query_processed]).toarray().ravel()
 
-    # Transform texts to vectors and ensure they are flat
-    text_vectors = vectorizer.transform(texts).toarray()
+    # Transform all texts to vectors
+    document_vectors = vectorizer.transform(texts).toarray()
 
     similarities = []
-    for text_vector in text_vectors:
+    for text_vector in document_vectors:
+        text_vector = text_vector.ravel()
         similarity = float('nan')
         if method == "cosine":
             similarity = cosine_similarity(query_vector, text_vector.ravel())  # Flatten the vector
@@ -123,10 +135,30 @@ def calculate_similarities(query, texts, vectorizer, method):
             similarity = euclidean_distance(query_vector, text_vector.ravel())
         elif method == "manhattan":
             similarity = manhattan_distance(query_vector, text_vector.ravel())
-
         similarities.append(similarity)
-
     return similarities
+
+
+def query_relevant_documentsInterface(cursor,query, texts, vectorizer, method, top_n=5):
+    if not query:
+        return []  # Return empty if no query is provided
+
+    similarities = calculate_similarities(query, texts, vectorizer, method)
+
+    # Fetch all documents from the database
+    documents = fetch_all_documents(cursor)
+
+    print(f"Total documents compared: {len(similarities)}")
+    if method in ['euclidean', 'manhattan']:
+        top_indices = np.argsort(similarities)[:top_n]  # Ascending order for distances
+    else:
+        top_indices = np.argsort(similarities)[-top_n:][::-1]  # Descending order for similarities
+
+    print(f"Top indices: {top_indices}")
+    print(f"URLs length: {len(document_urls)}")
+
+    results = [(documents[i][1], similarities[i]) for i in top_indices]
+    return results
 
 
 def main_menu(db, matrix, vectorizer):
@@ -163,7 +195,7 @@ def handle_menu_choice(db, choice, matrix, vectorizer):
         elif choice == "3":
             id1 = int(input("Enter first document ID: "))
             id2 = int(input("Enter second document ID: "))
-            compare_documents(id1, id2, matrix)
+            compare_documents(cursor, id1, id2, matrix)
         elif choice == "4":
             compare_with_all_documents(db, matrix)
         elif choice == "5":
@@ -174,7 +206,8 @@ def handle_menu_choice(db, choice, matrix, vectorizer):
             show_similarity_matrix(cursor, vectorizer)
         elif choice == "8":
             query = input("Enter a query: ")
-            query_relevant_documents(query, build_corpus_from_db(cursor), vectorizer)
+            texts = build_corpus_from_db(cursor)  # This should use the corrected preprocess_text
+            query_relevant_documents(query, texts, vectorizer, cursor)
         db.commit()
     except Exception as e:
         print("An error occurred:", e)
@@ -248,7 +281,9 @@ def create_similarity_matrix(texts, vectorizer, method):
 
 def add_document_by_text(cursor, text):
     if not document_exists(cursor, text, by_text=True):
-        doc_id = insert_document(cursor, text)
+        # Generate a unique title using the current timestamp
+        title = f"Generated Title {int(time.time())}"
+        doc_id = insert_document(cursor, text, title)
         terms = preprocess_text(text)
         term_frequencies = collections.Counter(terms)
         for term, freq in term_frequencies.items():
@@ -365,7 +400,21 @@ def menu_eliminate_document(cursor):
             print("Invalid choice. Please select a valid option.")
 
 
-def compare_documents(id1, id2, matrix):
+def compare_documents(cursor, id1, id2, matrix):
+    documents = fetch_all_documents(cursor)
+
+    # Create a mapping from document IDs to indices
+    id_to_index = {doc_id: index for index, (doc_id, _, _) in enumerate(documents)}
+
+    # Get the indices corresponding to the document IDs
+    index1 = id_to_index.get(id1)
+    index2 = id_to_index.get(id2)
+
+    # If either of the document IDs is not found, return None
+    if index1 is None or index2 is None:
+        print("One or both document IDs not found.")
+        return None
+
     while True:
         print("\nDocument Comparison Menu:")
         print("For Cosine, Dice, and Jaccard, a value of 0 means no similarity, and 1 means a complete match.")
@@ -381,8 +430,8 @@ def compare_documents(id1, id2, matrix):
         if choice == '9':
             break
 
-        vector_a = matrix[id1]
-        vector_b = matrix[id2]
+        vector_a = matrix[index1]
+        vector_b = matrix[index2]
 
         if choice == '1':
             print(f"Cosine Similarity: {cosine_similarity(vector_a, vector_b)}")
@@ -398,14 +447,64 @@ def compare_documents(id1, id2, matrix):
             print("Invalid choice. Please select a valid option.")
 
 
-def add_document_with_terms_and_frequencies(cursor, text, url=None):
-    doc_id = insert_document(cursor, text, url)
-    terms = preprocess_text(text)
+def add_document_with_terms_and_frequencies(cursor, processed_text, url=None):
+    # Convert list to string if processed_text is a list
+    if isinstance(processed_text, list):
+        processed_text = ' '.join(processed_text)
+
+    doc_id = insert_document(cursor, processed_text, url)
+    terms = preprocess_text(processed_text)
     term_frequencies = collections.Counter(terms)
+
+    # Insert new terms and ensure they exist in the 'Terms' table before adding frequencies
+    existing_terms = {term[1]: term[0] for term in fetch_all_terms(cursor)}
+
     for term, freq in term_frequencies.items():
-        term_id = get_or_create_term_id(cursor, term)
+        if term not in existing_terms:
+            # If the term doesn't exist in the 'Terms' table, insert it
+            term_id = insert_terms(cursor, [term])
+            existing_terms[term] = term_id
+        else:
+            term_id = existing_terms[term]
         insert_or_update_frequency(cursor, doc_id, term_id, freq)
 
+
+def compare_documents_interface(cursor, matrix):
+    # Fetch all documents from the database
+    documents = fetch_all_documents(cursor)
+    document_dict = {doc_id: title for doc_id, _, title in documents}
+
+    # Streamlit interface components
+    st.title("Document Comparison")
+    doc1_id = st.selectbox('Select the first document:', list(document_dict.keys()), format_func=lambda x: f"{x}: {document_dict[x]}")
+    doc2_id = st.selectbox('Select the second document:', list(document_dict.keys()), format_func=lambda x: f"{x}: {document_dict[x]}")
+
+    if doc1_id and doc2_id:
+        method = st.selectbox(
+            'Choose the similarity method:',
+            ('Cosine Similarity', 'Dice Similarity', 'Jaccard Similarity', 'Euclidean Distance', 'Manhattan Distance')
+        )
+
+        if st.button('Compare Documents'):
+            # Assuming `matrix` is indexed directly by `doc_id`
+            vector_a = matrix[doc1_id]
+            vector_b = matrix[doc2_id]
+
+            # Dictionary of similarity methods
+            similarity_functions = {
+                'Cosine Similarity': cosine_similarity,
+                'Dice Similarity': dice_similarity,
+                'Jaccard Similarity': jaccard_similarity,
+                'Euclidean Distance': euclidean_distance,
+                'Manhattan Distance': manhattan_distance
+            }
+
+            # Calculate similarity or distance
+            if method in similarity_functions:
+                result = similarity_functions[method](vector_a, vector_b)
+                st.write(f"{method}: {result:.4f}")
+            else:
+                st.error("Invalid choice. Please select a valid option.")
 
 def show_similarity_matrixInterface(cursor, vectorizer):
     texts = build_corpus_from_db(cursor)
@@ -415,10 +514,9 @@ def show_similarity_matrixInterface(cursor, vectorizer):
         return None
 
     method = st.selectbox(
-        'Select a method for similarity measurement:',
-        'For Cosine, Dice, and Jaccard, a value of 0 means no similarity, and 1 means a complete match.',
-        'For Euclidean and Manhattan, the closer the value is to 0, the better the similarity.',
-        ['cosine', 'dice', 'jaccard', 'euclidean', 'manhattan']
+        label='Select a method for similarity measurement:',
+        options=['cosine', 'dice', 'jaccard', 'euclidean', 'manhattan'],
+        index=0  # Default to the first item if needed
     )
 
     similarity_matrix = create_similarity_matrix(texts, vectorizer, method)
@@ -430,6 +528,7 @@ def show_similarity_matrixInterface(cursor, vectorizer):
     # Display the similarity matrix
     st.write("Similarity Matrix:")
     st.dataframe(df.style.format("{:.2f}"))
+
 
 
 def show_term_document_matrixInterface(cursor):
@@ -456,45 +555,6 @@ def show_term_document_matrixInterface(cursor):
 
     return matrix_df
 
-
-def query_relevant_documentsInterface(query, texts, vectorizer, method, top_n=5):
-    if not query:
-        return []  # Return empty if no query is provided
-
-    # Preprocess and vectorize the query
-    similarities = calculate_similarities(query, texts, vectorizer, method)
-
-    print(f"Total documents compared: {len(similarities)}")
-    if method in ['euclidean', 'manhattan']:
-        top_indices = np.argsort(similarities)[:top_n]  # Ascending order for distances
-    else:
-        top_indices = np.argsort(similarities)[-top_n:][::-1]  # Descending order for similarities
-
-    print(f"Top indices: {top_indices}")
-    print(f"URLs length: {len(document_urls)}")
-
-    results = [(document_urls[i], similarities[i]) for i in top_indices if i < len(document_urls)]
-    return results
-
-
-def compare_documents_interface(id1, id2, matrix, method):
-    vector_a = matrix[id1]
-    vector_b = matrix[id2]
-
-    similarity = float('nan')
-
-    if method == 'cosine':
-        similarity = cosine_similarity(vector_a, vector_b)
-    elif method == 'dice':
-        similarity = dice_similarity(vector_a, vector_b)
-    elif method == 'jaccard':
-        similarity = jaccard_similarity(vector_a, vector_b)
-    elif method == 'euclidean':
-        similarity = euclidean_distance(vector_a, vector_b)
-    elif method == 'manhattan':
-        similarity = manhattan_distance(vector_a, vector_b)
-
-    return similarity
 
 
 def initialize_database():

@@ -1,7 +1,6 @@
 from sklearn.feature_extraction.text import TfidfVectorizer
-
 from DocumentProcessing import initialize_database, build_corpus_from_db, main_menu
-from Queries import close_db
+from Queries import *
 
 
 def main():
