@@ -40,8 +40,9 @@ Before you start, ensure you have the following installed:
 
 5. **Run the Streamlit application**:
    ```bash
-   streamlit run app.py
+   streamlit run MainStreamLit.py
    ```
+If you don't want to use Streamlit app, you also has the MainTerminal.py, which gives you all the features of the GUI but in the terminal. 
 
 ## Usage
 
